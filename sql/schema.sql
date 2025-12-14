@@ -46,19 +46,20 @@ INSERT INTO revista_config (codigo, nombre, nombre_completo, compilador, plantil
 ('tecing', 'TECING', 'Revista TECING', 'xelatex', 'tecing');
 
 -- Tabla de trabajos de procesamiento
+-- Los archivos se guardan en el filesystem, no en MySQL
 CREATE TABLE IF NOT EXISTS jobs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     job_id VARCHAR(36) NOT NULL UNIQUE,
     user_id INT NOT NULL,
     revista_codigo VARCHAR(20) NOT NULL,
-    filename_original VARCHAR(255) NOT NULL,
+    filename_original VARCHAR(255) NOT NULL COMMENT 'Nombre original del archivo subido',
     file_extension VARCHAR(10) NOT NULL,
-    file_data LONGBLOB NOT NULL,
+    upload_filename VARCHAR(255) NOT NULL COMMENT 'Nombre del archivo en uploads/',
     file_size INT NOT NULL,
     status ENUM('pending', 'processing', 'completed', 'error') DEFAULT 'pending',
     error_message TEXT,
-    pdf_data LONGBLOB,
-    pdf_size INT,
+    zip_filename VARCHAR(255) COMMENT 'Nombre del archivo ZIP en processed/ (contiene LaTeX + PDF)',
+    zip_size INT COMMENT 'Tamaño del ZIP en bytes',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     started_at DATETIME,
     completed_at DATETIME,
@@ -94,7 +95,8 @@ SELECT
     r.nombre as revista_nombre,
     r.nombre_completo as revista_nombre_completo,
     r.compilador,
-    r.plantilla_nombre,
+    r.plantilla_folder,
+    r.plantilla_main,
     r.volumen,
     r.año,
     r.numero,
@@ -104,22 +106,30 @@ INNER JOIN users u ON j.user_id = u.id
 INNER JOIN revista_config r ON j.revista_codigo = r.codigo;
 
 -- Procedimiento para limpiar trabajos antiguos (>30 días)
+-- IMPORTANTE: También debe limpiar archivos del filesystem
 DELIMITER //
 CREATE PROCEDURE clean_old_jobs()
 BEGIN
-    DELETE FROM jobs
-    WHERE delete_at IS NOT NULL
-    AND delete_at < NOW();
+    -- Marcar trabajos para eliminación
+    -- El script de limpieza PHP debe leer estos registros ANTES de eliminarlos
+    -- para borrar los archivos del filesystem
 
-    -- También limpiar jobs completados hace más de 30 días
-    DELETE FROM jobs
+    -- Trabajos completados hace más de 30 días
+    UPDATE jobs
+    SET delete_at = NOW()
     WHERE status = 'completed'
-    AND completed_at < DATE_SUB(NOW(), INTERVAL 30 DAY);
+    AND completed_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
+    AND delete_at IS NULL;
 
-    -- Limpiar jobs con error hace más de 7 días
-    DELETE FROM jobs
+    -- Trabajos con error hace más de 7 días
+    UPDATE jobs
+    SET delete_at = NOW()
     WHERE status = 'error'
-    AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY);
+    AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+    AND delete_at IS NULL;
+
+    -- Nota: Los archivos deben eliminarse manualmente por un script PHP
+    -- antes de eliminar los registros de la base de datos
 END //
 DELIMITER ;
 

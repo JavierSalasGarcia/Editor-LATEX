@@ -138,7 +138,12 @@ function sendCompletedEmail($email, $nombre, $jobId, $status, $errorMessage = nu
             <body>
                 <h2>Hola $nombre,</h2>
                 <p>¡Tu documento ha sido procesado exitosamente!</p>
-                <p><a href='$downloadUrl' style='display:inline-block;padding:10px 20px;background:#4CAF50;color:white;text-decoration:none;'>Descargar PDF</a></p>
+                <p><strong>Descargarás un archivo ZIP que contiene:</strong></p>
+                <ul>
+                    <li>📄 Archivos LaTeX (.tex, .cls, logos, figuras)</li>
+                    <li>📕 PDF compilado listo para publicación</li>
+                </ul>
+                <p><a href='$downloadUrl' style='display:inline-block;padding:10px 20px;background:#4CAF50;color:white;text-decoration:none;'>Descargar ZIP (LaTeX + PDF)</a></p>
                 <p>O copia este enlace en tu navegador:</p>
                 <p>$downloadUrl</p>
                 <p>El archivo estará disponible por 30 días.</p>
@@ -186,6 +191,7 @@ function getRevistaConfig() {
 
 /**
  * Crea un nuevo trabajo de procesamiento
+ * Guarda archivo en filesystem (uploads/) y metadata en MySQL
  */
 function createJob($userId, $revistaConfig, $file) {
     $db = getDB();
@@ -193,16 +199,31 @@ function createJob($userId, $revistaConfig, $file) {
     $jobId = generateUUID();
     $filename = $file['name'];
     $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-    $fileData = file_get_contents($file['tmp_name']);
     $fileSize = $file['size'];
+
+    // Nombre del archivo en uploads/
+    $uploadFilename = $jobId . '.' . $extension;
+    $uploadPath = __DIR__ . '/../uploads/' . $uploadFilename;
+
+    // Asegurar que existe la carpeta uploads/
+    $uploadsDir = __DIR__ . '/../uploads';
+    if (!file_exists($uploadsDir)) {
+        mkdir($uploadsDir, 0755, true);
+    }
+
+    // Mover archivo del temporal a uploads/
+    if (!move_uploaded_file($file['tmp_name'], $uploadPath)) {
+        throw new Exception("Error al guardar el archivo");
+    }
 
     // Calcular fecha de eliminación (30 días)
     $deleteAt = date('Y-m-d H:i:s', strtotime('+30 days'));
 
+    // Guardar metadata en MySQL (NO el archivo completo)
     $stmt = $db->prepare("
         INSERT INTO jobs (
             job_id, user_id, revista_codigo, filename_original,
-            file_extension, file_data, file_size, delete_at
+            file_extension, upload_filename, file_size, delete_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
@@ -212,7 +233,7 @@ function createJob($userId, $revistaConfig, $file) {
         $revistaConfig['codigo'],
         $filename,
         $extension,
-        $fileData,
+        $uploadFilename,
         $fileSize,
         $deleteAt
     ]);

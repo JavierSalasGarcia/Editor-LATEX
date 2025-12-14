@@ -30,6 +30,12 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 PLANTILLAS_FOLDER = os.environ.get('PLANTILLAS_FOLDER', r'C:\Editor-LATEX\plantillas')
 TEMP_FOLDER = os.environ.get('TEMP_FOLDER', r'C:\Editor-LATEX\temp')
 
+# Carpeta de uploads del servidor (puede ser carpeta compartida de red o ruta local)
+# Ejemplo: \\servidor\Editor-LATEX\php\uploads (Windows UNC path)
+# Ejemplo: /mnt/servidor/Editor-LATEX/php/uploads (Linux mount)
+SERVER_UPLOADS_FOLDER = os.environ.get('SERVER_UPLOADS_FOLDER', r'\\localhost\Editor-LATEX\php\uploads')
+SERVER_PROCESSED_FOLDER = os.environ.get('SERVER_PROCESSED_FOLDER', r'\\localhost\Editor-LATEX\php\processed')
+
 # Horario de trabajo (8am - 5pm)
 WORK_START_HOUR = int(os.environ.get('WORK_START_HOUR', '8'))
 WORK_END_HOUR = int(os.environ.get('WORK_END_HOUR', '17'))
@@ -164,25 +170,73 @@ class DocumentProcessor:
         except Exception as e:
             print(f"  ✗ Error actualizando estado: {e}")
 
-    def save_pdf(self, job_id, pdf_path):
-        """Guarda PDF en la base de datos"""
+    def create_zip_package(self, job_id, pdf_path, temp_dir):
+        """
+        Crea un archivo ZIP con:
+        - Todos los archivos LaTeX (.tex, .cls, logos/, figuras/)
+        - PDF compilado
+        """
+        import zipfile
+
+        print(f"  → Creando paquete ZIP...")
+
+        zip_path = os.path.join(TEMP_FOLDER, f"{job_id}.zip")
+
         try:
-            with open(pdf_path, 'rb') as f:
-                pdf_data = f.read()
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # Agregar todos los archivos del directorio temporal
+                # Esto incluye: .tex, .cls, logos/, figuras/, etc.
+                for root, dirs, files in os.walk(temp_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        # Calcular ruta relativa para mantener estructura
+                        arcname = os.path.relpath(file_path, temp_dir)
 
-            pdf_size = len(pdf_data)
+                        # Solo agregar archivos relevantes (excluir .aux, .log, etc.)
+                        if file.endswith(('.tex', '.cls', '.sty', '.bst', '.bib', '.png', '.jpg', '.jpeg', '.pdf')):
+                            zipf.write(file_path, arcname)
+                            print(f"    Agregando: {arcname}")
 
+            zip_size = os.path.getsize(zip_path)
+            print(f"  ✓ ZIP creado ({zip_size / 1024:.2f} KB)")
+
+            return zip_path
+
+        except Exception as e:
+            print(f"  ✗ Error creando ZIP: {e}")
+            raise
+
+    def upload_zip_to_server(self, job_id, zip_path):
+        """Sube ZIP al servidor y actualiza MySQL"""
+        try:
+            zip_filename = f"{job_id}.zip"
+            zip_size = os.path.getsize(zip_path)
+
+            # Copiar ZIP a carpeta processed del servidor
+            dest_path = os.path.join(SERVER_PROCESSED_FOLDER, zip_filename)
+
+            # Crear carpeta si no existe
+            os.makedirs(SERVER_PROCESSED_FOLDER, exist_ok=True)
+
+            # Copiar archivo
+            import shutil
+            shutil.copy2(zip_path, dest_path)
+
+            print(f"  ✓ ZIP copiado a servidor: {dest_path}")
+
+            # Actualizar MySQL
             cursor = self.db.get_cursor()
             cursor.execute(
-                "UPDATE jobs SET pdf_data = %s, pdf_size = %s WHERE job_id = %s",
-                (pdf_data, pdf_size, job_id)
+                "UPDATE jobs SET zip_filename = %s, zip_size = %s WHERE job_id = %s",
+                (zip_filename, zip_size, job_id)
             )
             self.db.commit()
             cursor.close()
 
-            print(f"  ✓ PDF guardado ({pdf_size / 1024:.2f} KB)")
+            print(f"  ✓ MySQL actualizado ({zip_size / 1024:.2f} KB)")
+
         except Exception as e:
-            print(f"  ✗ Error guardando PDF: {e}")
+            print(f"  ✗ Error subiendo ZIP: {e}")
             raise
 
     def notify_user(self, job_id, status):
@@ -401,17 +455,26 @@ Devuelve SOLO el código LaTeX completo.
             self.update_job_status(job_id, 'processing')
             self.log(job_id, 'info', 'Iniciando procesamiento')
 
+            # Leer archivo del servidor
+            upload_path = os.path.join(SERVER_UPLOADS_FOLDER, job['upload_filename'])
+
+            if not os.path.exists(upload_path):
+                raise Exception(f"Archivo no encontrado en servidor: {upload_path}")
+
+            with open(upload_path, 'rb') as f:
+                file_data = f.read()
+
             # Procesar según tipo
             if job['file_extension'] in ['doc', 'docx']:
                 latex_content = self.process_word_to_latex(
-                    job['file_data'],
+                    file_data,
                     job['plantilla_folder'],
                     job['plantilla_main'],
                     job
                 )
             elif job['file_extension'] == 'tex':
                 latex_content = self.process_latex_file(
-                    job['file_data'],
+                    file_data,
                     job['plantilla_folder'],
                     job['plantilla_main'],
                     job
@@ -430,8 +493,13 @@ Devuelve SOLO el código LaTeX completo.
             )
             self.log(job_id, 'info', 'PDF compilado')
 
-            # Guardar PDF
-            self.save_pdf(job_id, pdf_file)
+            # Crear ZIP con LaTeX + PDF
+            zip_path = self.create_zip_package(job_id, pdf_file, temp_dir)
+            self.log(job_id, 'info', 'ZIP creado con LaTeX + PDF')
+
+            # Subir ZIP al servidor
+            self.upload_zip_to_server(job_id, zip_path)
+            self.log(job_id, 'info', 'ZIP subido al servidor')
 
             # Actualizar estado
             self.update_job_status(job_id, 'completed')
