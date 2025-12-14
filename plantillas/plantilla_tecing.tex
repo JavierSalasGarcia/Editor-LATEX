@@ -1,0 +1,43 @@
+% Plantilla de ejemplo para revista TECING
+\documentclass[11pt,a4paper,twocolumn]{article}
+\usepackage{fontspec}
+\usepackage[spanish]{babel}
+\usepackage{graphicx}
+\usepackage{multicol}
+\usepackage[margin=2cm]{geometry}
+
+% Metadatos
+\def\revistaVolumen{1}
+\def\revistaAño{2025}
+\def\revistaNumero{1}
+\def\paginaInicial{1}
+
+% Fuentes
+\setmainfont{Arial}
+
+% Encabezado
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{\small TECING - Tecnología, Ciencia e Ingeniería | Vol. \revistaVolumen\ No. \revistaNumero\ (\revistaAño)}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\begin{document}
+
+% Encabezado de revista
+\twocolumn[
+\begin{@twocolumnfalse}
+\begin{center}
+    {\Huge\textbf{TECING}}\\[0.2cm]
+    {\large Tecnología, Ciencia e Ingeniería}\\[0.1cm]
+    {\small Volumen \revistaVolumen\ | Número \revistaNumero\ | \revistaAño}\\[0.3cm]
+    \hrule height 1.5pt
+    \vspace{0.5cm}
+\end{center}
+\end{@twocolumnfalse}
+]
+
+% Contenido del artículo (insertado por Gemini)
+
+\end{document}

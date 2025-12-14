@@ -1,0 +1,37 @@
+% Plantilla de ejemplo para revista ESTELAC
+\documentclass[12pt,letterpaper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage[margin=3cm]{geometry}
+\usepackage{natbib}
+
+% Metadatos
+\def\revistaVolumen{1}
+\def\revistaAño{2025}
+\def\revistaNumero{1}
+\def\paginaInicial{1}
+
+% Encabezado
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{ESTELAC}
+\rhead{Vol. \revistaVolumen(\revistaNumero), \revistaAño}
+\cfoot{\thepage}
+
+\begin{document}
+
+\begin{center}
+    \includegraphics[width=0.3\textwidth]{logo_estelac.png}\\[0.5cm] % Opcional
+    {\Large\textsc{Revista ESTELAC}}\\[0.2cm]
+    {\large Estudios en Tecnología, Educación y Cultura}\\[0.3cm]
+    \rule{\linewidth}{0.5mm}\\[0.2cm]
+    {\small ISSN: 1234-5678 $\bullet$ Vol. \revistaVolumen\ $\bullet$ Núm. \revistaNumero\ $\bullet$ \revistaAño}\\[0.5cm]
+    \rule{\linewidth}{0.5mm}
+\end{center}
+
+% Contenido del artículo (insertado por Gemini)
+
+\end{document}
