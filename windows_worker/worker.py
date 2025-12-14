@@ -198,7 +198,7 @@ class DocumentProcessor:
         except Exception as e:
             print(f"  ⚠ Error marcando para notificación: {e}")
 
-    def process_word_to_latex(self, word_data, plantilla_nombre, job):
+    def process_word_to_latex(self, word_data, plantilla_folder, plantilla_main, job):
         """Convierte documento Word a LaTeX usando Gemini"""
         print(f"  → Procesando Word con Gemini...")
 
@@ -225,13 +225,15 @@ class DocumentProcessor:
             # Limpiar archivo temporal
             os.unlink(word_file)
 
-            # Leer plantilla
-            plantilla_path = os.path.join(PLANTILLAS_FOLDER, plantilla_nombre)
+            # Leer plantilla principal (main.tex)
+            plantilla_path = os.path.join(PLANTILLAS_FOLDER, plantilla_folder, plantilla_main)
             plantilla_content = ""
 
             if os.path.exists(plantilla_path):
                 with open(plantilla_path, 'r', encoding='utf-8') as f:
                     plantilla_content = f.read()
+            else:
+                print(f"  ⚠ Plantilla no encontrada: {plantilla_path}")
 
             # Prompt para Gemini
             prompt = f"""
@@ -272,15 +274,15 @@ Devuelve SOLO el código LaTeX completo, sin bloques de código markdown.
             print(f"  ✗ Error procesando Word: {e}")
             raise
 
-    def process_latex_file(self, latex_data, plantilla_nombre, job):
+    def process_latex_file(self, latex_data, plantilla_folder, plantilla_main, job):
         """Procesa archivo LaTeX existente"""
         print(f"  → Procesando LaTeX...")
 
         try:
             latex_content = latex_data.decode('utf-8', errors='ignore')
 
-            # Leer plantilla
-            plantilla_path = os.path.join(PLANTILLAS_FOLDER, plantilla_nombre)
+            # Leer plantilla principal
+            plantilla_path = os.path.join(PLANTILLAS_FOLDER, plantilla_folder, plantilla_main)
             if os.path.exists(plantilla_path):
                 with open(plantilla_path, 'r', encoding='utf-8') as f:
                     plantilla_content = f.read()
@@ -321,7 +323,7 @@ Devuelve SOLO el código LaTeX completo.
             # Retornar original si falla
             return latex_data.decode('utf-8', errors='ignore')
 
-    def compile_latex(self, latex_content, job_id, compilador='pdflatex'):
+    def compile_latex(self, latex_content, job_id, compilador, plantilla_folder):
         """Compila LaTeX a PDF"""
         print(f"  → Compilando con {compilador}...")
 
@@ -329,7 +331,33 @@ Devuelve SOLO el código LaTeX completo.
         temp_dir = os.path.join(TEMP_FOLDER, job_id)
         os.makedirs(temp_dir, exist_ok=True)
 
-        # Escribir .tex
+        # IMPORTANTE: Copiar TODA la carpeta de la plantilla al directorio temporal
+        # Esto incluye: .cls, logos/, figuras/, y cualquier archivo adicional
+        plantilla_source = os.path.join(PLANTILLAS_FOLDER, plantilla_folder)
+
+        if os.path.exists(plantilla_source):
+            print(f"  → Copiando plantilla desde {plantilla_source}...")
+            import shutil
+
+            # Copiar todos los archivos y subcarpetas
+            for item in os.listdir(plantilla_source):
+                source = os.path.join(plantilla_source, item)
+                dest = os.path.join(temp_dir, item)
+
+                if os.path.isdir(source):
+                    # Copiar carpeta completa (logos/, figuras/, etc.)
+                    if os.path.exists(dest):
+                        shutil.rmtree(dest)
+                    shutil.copytree(source, dest)
+                else:
+                    # Copiar archivo (.cls, .sty, etc.)
+                    shutil.copy2(source, dest)
+
+            print(f"  ✓ Plantilla copiada")
+        else:
+            print(f"  ⚠ Carpeta de plantilla no encontrada: {plantilla_source}")
+
+        # Escribir .tex con el contenido procesado
         tex_file = os.path.join(temp_dir, f"{job_id}.tex")
         with open(tex_file, 'w', encoding='utf-8') as f:
             f.write(latex_content)
@@ -377,13 +405,15 @@ Devuelve SOLO el código LaTeX completo.
             if job['file_extension'] in ['doc', 'docx']:
                 latex_content = self.process_word_to_latex(
                     job['file_data'],
-                    job['plantilla_nombre'],
+                    job['plantilla_folder'],
+                    job['plantilla_main'],
                     job
                 )
             elif job['file_extension'] == 'tex':
                 latex_content = self.process_latex_file(
                     job['file_data'],
-                    job['plantilla_nombre'],
+                    job['plantilla_folder'],
+                    job['plantilla_main'],
                     job
                 )
             else:
@@ -391,8 +421,13 @@ Devuelve SOLO el código LaTeX completo.
 
             self.log(job_id, 'info', 'Documento procesado con Gemini')
 
-            # Compilar
-            pdf_file = self.compile_latex(latex_content, job_id, job['compilador'])
+            # Compilar (pasa plantilla_folder para copiar archivos .cls, logos, etc.)
+            pdf_file = self.compile_latex(
+                latex_content,
+                job_id,
+                job['compilador'],
+                job['plantilla_folder']
+            )
             self.log(job_id, 'info', 'PDF compilado')
 
             # Guardar PDF

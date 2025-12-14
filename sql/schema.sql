@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS revista_config (
     nombre VARCHAR(100) NOT NULL,
     nombre_completo VARCHAR(255) NOT NULL,
     compilador ENUM('pdflatex', 'xelatex') NOT NULL DEFAULT 'pdflatex',
-    plantilla_nombre VARCHAR(100) NOT NULL,
+    plantilla_folder VARCHAR(100) NOT NULL COMMENT 'Nombre de la carpeta en plantillas/',
+    plantilla_main VARCHAR(100) NOT NULL DEFAULT 'main.tex' COMMENT 'Archivo .tex principal',
     volumen INT NOT NULL DEFAULT 1,
     año INT NOT NULL DEFAULT 2025,
     numero INT NOT NULL DEFAULT 1,
@@ -36,11 +37,13 @@ CREATE TABLE IF NOT EXISTS revista_config (
 ) ENGINE=InnoDB;
 
 -- Insertar configuración inicial de las 4 revistas
-INSERT INTO revista_config (codigo, nombre, nombre_completo, compilador, plantilla_nombre) VALUES
-('ideas', 'IDEAS', 'Revista IDEAS', 'pdflatex', 'plantilla_ideas.tex'),
-('informaticae', 'INFORMATICAE', 'Revista INFORMATICAE', 'xelatex', 'plantilla_informaticae.tex'),
-('estelac', 'ESTELAC', 'Revista ESTELAC', 'pdflatex', 'plantilla_estelac.tex'),
-('tecing', 'TECING', 'Revista TECING', 'xelatex', 'plantilla_tecing.tex');
+-- Nota: plantilla_folder es el nombre de la carpeta en plantillas/
+-- Cada carpeta contiene: main.tex, revista.cls, logos/, figuras/
+INSERT INTO revista_config (codigo, nombre, nombre_completo, compilador, plantilla_folder) VALUES
+('ideas', 'IDEAS', 'Revista IDEAS', 'pdflatex', 'ideas'),
+('informaticae', 'INFORMATICAE', 'Revista INFORMATICAE', 'xelatex', 'informaticae'),
+('estelac', 'ESTELAC', 'Revista ESTELAC', 'pdflatex', 'estelac'),
+('tecing', 'TECING', 'Revista TECING', 'xelatex', 'tecing');
 
 -- Tabla de trabajos de procesamiento
 CREATE TABLE IF NOT EXISTS jobs (
