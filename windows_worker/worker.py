@@ -493,6 +493,9 @@ Devuelve SOLO el código LaTeX completo.
             )
             self.log(job_id, 'info', 'PDF compilado')
 
+            # Directorio temporal donde se compiló
+            temp_dir = os.path.join(TEMP_FOLDER, job_id)
+
             # Crear ZIP con LaTeX + PDF
             zip_path = self.create_zip_package(job_id, pdf_file, temp_dir)
             self.log(job_id, 'info', 'ZIP creado con LaTeX + PDF')
