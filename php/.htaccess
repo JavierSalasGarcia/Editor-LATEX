@@ -1,0 +1,33 @@
+# Protección básica
+Options -Indexes
+
+# Bloquear acceso a archivos de configuración
+<Files "config.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Bloquear acceso a includes
+<FilesMatch "^(database|functions)\.php$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Bloquear acceso a cron
+<Files "cron_send_notifications.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# URL amigables (opcional)
+RewriteEngine On
+
+# Redirigir a HTTPS (recomendado)
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Limitar tamaño de subida
+php_value upload_max_filesize 50M
+php_value post_max_size 52M
+php_value max_execution_time 300
+php_value max_input_time 300
